@@ -1,0 +1,38 @@
+<VirtualHost *:80>
+    ServerName <%= @params[:server_name] %>
+    ServerAlias *
+
+    <!-- RewriteEngine On
+    RewriteCond %{HTTP:X-Forwarded-Proto} !https
+    RewriteCond %{REQUEST_URI} !/health
+    RewriteCond %{REQUEST_URI} !/me
+    RewriteRule (.*) https://%{SERVER_NAME}%{REQUEST_URI} [L,R] -->
+
+    ServerAdmin <%= @params[:admin] %>
+    DocumentRoot <%= @params[:docroot] %>
+    ErrorLog ${APACHE_LOG_DIR}/error.log
+    CustomLog ${APACHE_LOG_DIR}/access.log combined
+
+    WSGIPassAuthorization On
+    <Directory <%= @params[:docroot] %>>
+        <Files wsgi.py>
+        Order deny,allow
+        Require all granted
+        </Files>
+    </Directory>
+
+    Alias /media/ /home/<%= @params[:user] %>/media/
+    Alias /static/ <%= @params[:docroot] %>/static/
+
+    <Directory <%= @params[:docroot] %>/static>
+        Require all granted
+    </Directory>
+    <Directory /home/<%= @params[:user] %>/media>
+        Require all granted
+    </Directory>
+
+</VirtualHost>
+
+WSGIDaemonProcess exams python-path=<%= @params[:docroot] %>:/home/<%= @params[:user] %>/env/lib<%= @params[:python] %>/site-packages
+WSGIProcessGroup <%= @params[:project] %>
+WSGIScriptAlias / <%= @params[:docroot] %>/wsgi.py

@@ -1,0 +1,46 @@
+#
+# Cookbook Name:: <%= @config["CHEF_REPO"] %>
+# Recipe:: system
+#
+# Copyright (C) <%= @config["YEAR"] %> <%= @config["NAME"] %>
+#
+# All rights reserved - Do Not Redistribute
+#
+
+include_recipe 'apt'
+include_recipe 'python'
+include_recipe "python::pip"
+python_pip "virtualenv" do
+  action :install
+end
+
+if Dir.exists? "/home/vagrant"
+    user = "vagrant"
+else
+  user = "ubuntu"
+end
+virtualenv = "/home/#{user}/env"
+
+package "my packages" do
+  package_name [
+    # Django
+    "git",
+    "libpq-dev",
+    "libffi-dev",
+    "libjpeg-dev",
+    "libmysqlclient-dev",
+    "mercurial",
+    "libxslt-dev"
+  ]
+  action :install
+end
+
+# NOTE: This will fail with SSL errors if owner/group isn't specified
+python_virtualenv "#{virtualenv}" do
+    # interpreter "/usr/bin/python"
+    owner "#{user}"
+    group "#{user}"
+    options "--no-site-packages"
+    action :create
+end
+

@@ -1,0 +1,72 @@
+Vagrant.configure("2") do |config|
+  config.vm.provider "virtualbox" do |v|
+    v.memory = 4096
+    # The AWS api forces signed requests to be no older than 5 minutes. If you leave a vagrant VM running while your
+    # host OS sleeps, you can experience a drastic time skew on the guest OS.
+    #
+    # This forces the system time to sync every 10 seconds as opposed to the default 20 minutes.  If you still
+    # experience AWS 400 errors, the solution is to run `vagrant reload`.
+    v.customize [ "guestproperty", "set", :id, "/VirtualBox/GuestAdd/VBoxService/--timesync-set-threshold", 10000 ]
+
+    # Remote files seem to download slowly without these settings
+    v.customize [ "modifyvm", :id, "--natdnshostresolver1", "on" ]
+    v.customize [ "modifyvm", :id, "--natdnsproxy1", "on" ]
+  end
+  
+  # the line below is going to name your machine, this will help you find it when it is running on 
+  # your host machine.  Uncomment the line and choose a unique name you can associate this 
+  # virtual machine with
+  # config.vm.hostname = "<%= @config["VM_NAME"] %>"
+  config.vm.box = "ubuntu/trusty64"
+
+  # the line below is going to determine which port your application will be forwarded to on your 
+  # host machine.  For example, if your application is using php and apache, apache will be using 
+  # port 80.  If you wanted to forward that to port 8000 on your host the line would look like:
+  # config.vm.network :forwarded_port, guest: 80, host: 8000
+  # Determine which port your application will be using, and choose a port you want to forward to, 
+  # then uncomment this line and fill in the values
+  # config.vm.network :forwarded_port, guest: <%= @config["GUEST_PORT"] %>, host: 8000
+  config.vm.network :forwarded_port, guest: 5555, host: 5555
+  config.vm.network :public_network, bridge: "en1: Wi-Fi (AirPort)"
+  config.vm.boot_timeout = 120
+
+  config.berkshelf.enabled = true
+  config.omnibus.chef_version = "12.10.24"
+
+ #  You donâ€™t need to get your code on your virtual machine because it is able to share folders with
+ #  your host machine.  Your repo root should be in the directory that contains this Vagrantfile.
+ # Uncomment the line below and fill in the name of your repo 
+  config.vm.synced_folder "../", "/home/vagrant/<%= @config["CHEF_REPO"] %>"
+
+  # OSX needs this for concurrent open files
+  config.vm.provision :shell, :inline => "ulimit -n 4048"
+
+  # This is needed for windows 7 (not sure about later versions)
+  config.vm.provision :shell, :inline => <<-SHELL
+    echo 'Acquire::ForceIPv4 "true";' | tee /etc/apt/apt.conf.d/99force-ipv4
+  SHELL
+
+  #  Below youâ€™ll see chef.run_list =  
+  # This determines which recipes will be run when you start your machine with ```vagrant up``` 
+  # or ```vagrant provision```.  
+
+  config.vm.provision :chef_solo do |chef|
+    chef.log_level = :fatal
+    # Sets password for the postgres user
+    chef.json = {
+      "vagrant" => {
+        "symlink_npm" => (RbConfig::CONFIG["host_os"] =~ /cygwin|mswin|mingw/) ? true : false
+      },
+      "postgresql" => {
+        "password" => {
+          "postgres" => "password"
+        }
+      }
+    }
+    chef.run_list = [
+      "recipe[<%= @config["CHEF_REPO"] %>::system]",
+      "recipe[<%= @config["CHEF_REPO"] %>::data]",
+      "recipe[<%= @config["CHEF_REPO"] %>::django]"
+    ]
+  end
+end

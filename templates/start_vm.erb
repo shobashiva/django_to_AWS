@@ -1,0 +1,69 @@
+#!/usr/bin/env ruby
+require "erb"
+
+## Fetch submodule
+system "echo", "-n", "Initializing cookbook submodule ...    "
+`git submodule update --init --recursive`
+sleep(1)
+system "echo", "-e", "\rInitializing cookbook submodule ...     [DONE]\033[K"
+
+class ERBContext
+  def initialize(hash)
+    hash.each_pair do |key, value|
+      instance_variable_set('@' + key.to_s, value)
+    end
+  end
+
+  def get_binding
+    binding
+  end
+end
+
+class String
+  def eruby(assigns={})
+    ERB.new(self).result(ERBContext.new(assigns).get_binding)
+  end
+end
+
+## Create fresh local.py with default database connection info
+if !File.exists? "<%= @config["SETTINGS"] %>"
+    config_data = {
+        :config => {
+            "DATABASE_USER" => "postgres",
+            "DATABASE_PASSWORD" => "password",
+            "DATABASE_HOST" => "127.0.0.1",
+            "DATABASE_PORT" => "5432",
+            "DEBUG" => true,
+            "DEV" => true
+        }
+    }
+    system "echo", "-n", "Initializing local.py with defaults ..."
+    template = File.read("<%= @config["SETTINGS_DIST"] %>")
+    File.write("<%= @config["SETTINGS"] %>", template.eruby(config_data))
+    sleep(1)
+    system "echo", "-e", "\rInitializing local_settings.py with defaults ... [DONE]\033[K"
+end
+
+file_chosen = false
+
+while !file_chosen do
+  puts "Enter path to private key to add to vm (most likely ~/.ssh/id_rsa): "
+  file_to_use = gets.chomp
+  absolute_path = File.expand_path(file_to_use)
+  if File.exists? absolute_path
+    puts "using " + file_to_use
+    info_to_write = File.read(absolute_path)
+    File.open("<%= @config["CHEF_REPO"] %>/files/id_rsa", "w") do |f|     
+      f.write(info_to_write)   
+    end
+    file_chosen = true
+  else
+    puts absolute_path
+    puts "A valid filepath wasn't provided"
+  end
+end
+
+puts "Starting vm ..."
+Dir.chdir("<%= @config["CHEF_REPO"] %>") do
+    system "vagrant up"
+end

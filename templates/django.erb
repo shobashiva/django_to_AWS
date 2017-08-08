@@ -1,0 +1,60 @@
+#
+# Cookbook Name:: <%= @config["CHEF_REPO"] %>
+# Recipe:: django
+#
+# Copyright (C) <%= @config["YEAR"] %> <%= @config["NAME"] %>
+#
+# All rights reserved - Do Not Redistribute
+#
+
+
+include_recipe 'python'
+include_recipe "python::pip"
+
+if Dir.exists? "/home/vagrant"
+    user = "vagrant"
+else
+  user = "ubuntu"
+end
+virtualenv = "/home/#{user}/env"
+
+directory "/home/#{user}/media" do
+  recursive true
+  mode 0777
+end
+
+if Dir.exists? "/home/vagrant"
+  cookbook_file "/home/#{user}/.ssh/id_rsa" do
+    source 'id_rsa'
+  end
+end
+
+python_pip "--exists-action w -r /home/#{user}/<%= @config["REQUIREMENTS"] %>" do
+    virtualenv "#{virtualenv}"
+    user "#{user}"
+    group "#{user}"
+end
+
+bash "syncdb" do
+  code "#{virtualenv}/bin/python manage.py syncdb --noinput"
+  cwd "/home/#{user}/<%= @config["MANAGEPY"] %>"
+end
+
+bash "migrate" do
+  code "#{virtualenv}/bin/python manage.py migrate"
+  cwd "/home/#{user}/<%= @config["MANAGEPY"] %>"
+  ignore_failure true
+end
+
+service "apache2" do
+  ignore_failure true
+  action [ :restart ]
+  notifies :run, 'bash[collectstatic]', :immediately
+end
+
+bash "collectstatic" do
+  code "echo 'yes' | #{virtualenv}/bin/python manage.py collectstatic"
+  cwd "/home/#{user}/<%= @config["MANAGEPY"] %>"
+  only_if { ::Dir.exists?("/home/#{user}/<%= @config["MANAGEPY"] %>") }
+  action :nothing
+end
